@@ -1,0 +1,46 @@
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/07-bootstrapping-etcd.md#bootstrapping-the-etcd-cluster
+---
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/07-bootstrapping-etcd.md#download-and-install-the-etcd-binaries
+- name: Fetch etcd binaries
+  ansible.builtin.unarchive:
+    src: https://github.com/etcd-io/etcd/releases/download/v3.4.15/etcd-v3.4.15-linux-amd64.tar.gz
+    dest: /tmp/
+    remote_src: yes
+
+- name: Install etcd binaries
+  ansible.builtin.copy:
+    src: "/tmp/etcd-v3.4.15-linux-amd64/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    remote_src: yes
+    mode: '0550'
+
+  loop:
+    - etcd
+    - etcdctl
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/07-bootstrapping-etcd.md#configure-the-etcd-server
+- name:
+  ansible.builtin.shell:
+    cmd: |
+      {
+        sudo mkdir -p /etc/etcd /var/lib/etcd
+        sudo chmod 700 /var/lib/etcd
+        sudo cp ca.pem kubernetes-key.pem kubernetes.pem /etc/etcd/
+      }
+
+- name:
+  set_fact:
+    ETCD_NAME: "{{ ansible_hostname }}"
+    INTERNAL_IP: "{{ hostvars[ansible_hostname]['ipv4'] }}"
+
+- name: Upload etcd service file
+  ansible.builtin.template:
+    src: templates/etcd.service
+    dest: /etc/systemd/system/etcd.service
+
+- name: Start etcd service
+  ansible.builtin.systemd:
+    state: started
+    name: etcd
+    daemon_reload: yes

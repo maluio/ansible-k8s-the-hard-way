@@ -1,0 +1,24 @@
+---
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/79a3f79b27bd28f82f071bb877a266c2e62ee506/docs/10-configuring-kubectl.md#configuring-kubectl-for-remote-access
+- name: Configure kubectl
+  ansible.builtin.shell:
+    chdir: "{{ certs_dir_local }}"
+    cmd: |
+      {
+        kubectl config set-cluster kubernetes-the-hard-way \
+          --certificate-authority=ca.pem \
+          --embed-certs=true \
+          --server=https://${KUBERNETES_PUBLIC_ADDRESS}:6443
+
+        kubectl config set-credentials admin \
+          --client-certificate=admin.pem \
+          --client-key=admin-key.pem
+
+        kubectl config set-context kubernetes-the-hard-way \
+          --cluster=kubernetes-the-hard-way \
+          --user=admin
+
+        kubectl config use-context kubernetes-the-hard-way
+      }
+  environment:
+    KUBERNETES_PUBLIC_ADDRESS: "{{ hostvars['controller-0']['ipv4'] }}"

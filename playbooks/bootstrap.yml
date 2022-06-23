@@ -1,0 +1,32 @@
+---
+
+- name: Deploy to controllers
+  hosts: controller-*
+  remote_user: root
+  vars_files:
+    - vars.yml
+  roles:
+    - role: etcd
+      tags: [ etcd ]
+    - role: control-plane
+      tags: [ control-plane ]
+
+
+- name: Deploy to controller 0
+  hosts: controller-0
+  remote_user: root
+  vars_files:
+    - vars.yml
+  roles:
+    - role: rbac
+      tags: [ rbac ]
+
+
+- name: Deploy to workers
+  hosts: worker-*
+  remote_user: root
+  vars_files:
+    - vars.yml
+  roles:
+    - role: worker-nodes
+      tags: [ worker-nodes ]

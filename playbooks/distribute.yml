@@ -1,0 +1,62 @@
+---
+
+- name: Fetch files
+  hosts: controller-0
+  remote_user: root
+  vars_files:
+    - vars.yml
+  tasks:
+    - name: Download certs and kubeconfigs to local machine
+      ansible.posix.synchronize:
+        src: "{{ certs_dir }}/"
+        dest: "{{ certs_dir_local }}"
+        mode: pull
+
+- name: Distribute certs to worker
+  hosts: worker-*
+  remote_user: root
+  vars_files:
+    - vars.yml
+  tasks:
+    # https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/04-certificate-authority.md#distribute-the-client-and-server-certificates
+    - name: Copy worker certs and kubeconfigs
+      ansible.builtin.copy:
+        src: '{{ certs_dir_local }}/{{ ansible_hostname }}{{ item }}'
+        dest: '~/{{ ansible_hostname }}{{ item }}'
+      loop:
+        - '-key.pem'
+        -  '.pem'
+        - '.kubeconfig'
+    - name: Copy ca.pem
+      ansible.builtin.copy:
+        src: '{{ certs_dir_local }}/{{ item }}'
+        dest: '~/{{ item }}'
+      loop:
+        - ca.pem
+        - kube-proxy.kubeconfig
+
+- name: Distribute certs to controller
+  hosts: controller-*
+  remote_user: root
+  vars_files:
+    - vars.yml
+  tasks:
+    - name: Copy pems
+      ansible.builtin.copy:
+        src: '{{ certs_dir_local }}/{{ item }}'
+        dest: '~/{{ item }}'
+      loop:
+        - ca.pem
+        - ca-key.pem
+        - kubernetes-key.pem
+        - kubernetes.pem
+        - service-account-key.pem
+        - service-account.pem
+        - admin.kubeconfig
+        - kube-controller-manager.kubeconfig
+        - kube-scheduler.kubeconfig
+        - kube-scheduler.pem
+        - kube-scheduler-key.pem
+  roles:
+    - role: encryption
+      tags: [ encryption ]

@@ -1,0 +1,154 @@
+---
+
+- name:
+  set_fact:
+    KUBERNETES_PUBLIC_ADDRESS: "{{ hostvars['controller-0']['ipv4'] }}"
+
+- name: Install kubctl
+  get_url:
+    url: https://dl.k8s.io/release/v1.24.0/bin/linux/amd64/kubectl
+    dest: /usr/local/bin/kubectl
+    mode: '0550'
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/05-kubernetes-configuration-files.md#the-kubelet-kubernetes-configuration-file
+- name: Generate a kubeconfig file for each worker node
+  ansible.builtin.shell:
+    cmd: |
+        for instance in worker-0 worker-1 worker-2; do
+          kubectl config set-cluster kubernetes-the-hard-way \
+            --certificate-authority=ca.pem \
+            --embed-certs=true \
+            --server=https://${KUBERNETES_PUBLIC_ADDRESS}:6443 \
+            --kubeconfig=${instance}.kubeconfig
+        
+          kubectl config set-credentials system:node:${instance} \
+            --client-certificate=${instance}.pem \
+            --client-key=${instance}-key.pem \
+            --embed-certs=true \
+            --kubeconfig=${instance}.kubeconfig
+        
+          kubectl config set-context default \
+            --cluster=kubernetes-the-hard-way \
+            --user=system:node:${instance} \
+            --kubeconfig=${instance}.kubeconfig
+        
+          kubectl config use-context default --kubeconfig=${instance}.kubeconfig
+        done
+    chdir: "{{ certs_dir }}"
+  environment:
+      KUBERNETES_PUBLIC_ADDRESS: "{{ KUBERNETES_PUBLIC_ADDRESS }}"
+      CERTS_DIR: "{{ certs_dir }}"
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/05-kubernetes-configuration-files.md#the-kube-proxy-kubernetes-configuration-file
+- name: Generate a kubeconfig file for the kube-proxy service
+  ansible.builtin.shell:
+    cmd: |
+        {
+          kubectl config set-cluster kubernetes-the-hard-way \
+            --certificate-authority=ca.pem \
+            --embed-certs=true \
+            --server=https://${KUBERNETES_PUBLIC_ADDRESS}:6443 \
+            --kubeconfig=kube-proxy.kubeconfig
+        
+          kubectl config set-credentials system:kube-proxy \
+            --client-certificate=kube-proxy.pem \
+            --client-key=kube-proxy-key.pem \
+            --embed-certs=true \
+            --kubeconfig=kube-proxy.kubeconfig
+        
+          kubectl config set-context default \
+            --cluster=kubernetes-the-hard-way \
+            --user=system:kube-proxy \
+            --kubeconfig=kube-proxy.kubeconfig
+        
+          kubectl config use-context default --kubeconfig=kube-proxy.kubeconfig
+        }
+    chdir: "{{ certs_dir }}"
+  environment:
+      KUBERNETES_PUBLIC_ADDRESS: "{{ KUBERNETES_PUBLIC_ADDRESS }}"
+      CERTS_DIR: "{{ certs_dir }}"
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/05-kubernetes-configuration-files.md#the-kube-controller-manager-kubernetes-configuration-file
+- name: Generate a kubeconfig file for the kube-controller-manager service
+  ansible.builtin.shell:
+    cmd: |
+        {
+          kubectl config set-cluster kubernetes-the-hard-way \
+            --certificate-authority=ca.pem \
+            --embed-certs=true \
+            --server=https://127.0.0.1:6443 \
+            --kubeconfig=kube-controller-manager.kubeconfig
+        
+          kubectl config set-credentials system:kube-controller-manager \
+            --client-certificate=kube-controller-manager.pem \
+            --client-key=kube-controller-manager-key.pem \
+            --embed-certs=true \
+            --kubeconfig=kube-controller-manager.kubeconfig
+        
+          kubectl config set-context default \
+            --cluster=kubernetes-the-hard-way \
+            --user=system:kube-controller-manager \
+            --kubeconfig=kube-controller-manager.kubeconfig
+        
+          kubectl config use-context default --kubeconfig=kube-controller-manager.kubeconfig
+        }
+    chdir: "{{ certs_dir }}"
+  environment:
+      CERTS_DIR: "{{ certs_dir }}"
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/05-kubernetes-configuration-files.md#the-kube-scheduler-kubernetes-configuration-file
+- name: Generate a kubeconfig file for the kube-scheduler service
+  ansible.builtin.shell:
+    cmd: |
+        {
+          kubectl config set-cluster kubernetes-the-hard-way \
+            --certificate-authority=ca.pem \
+            --embed-certs=true \
+            --server=https://127.0.0.1:6443 \
+            --kubeconfig=kube-scheduler.kubeconfig
+        
+          kubectl config set-credentials system:kube-scheduler \
+            --client-certificate=kube-scheduler.pem \
+            --client-key=kube-scheduler-key.pem \
+            --embed-certs=true \
+            --kubeconfig=kube-scheduler.kubeconfig
+        
+          kubectl config set-context default \
+            --cluster=kubernetes-the-hard-way \
+            --user=system:kube-scheduler \
+            --kubeconfig=kube-scheduler.kubeconfig
+        
+          kubectl config use-context default --kubeconfig=kube-scheduler.kubeconfig
+        }
+    chdir: "{{ certs_dir }}"
+  environment:
+      CERTS_DIR: "{{ certs_dir }}"
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/05-kubernetes-configuration-files.md#the-admin-kubernetes-configuration-file
+- name: Generate a kubeconfig file for the admin user
+  ansible.builtin.shell:
+    cmd: |
+        {
+          kubectl config set-cluster kubernetes-the-hard-way \
+            --certificate-authority=ca.pem \
+            --embed-certs=true \
+            --server=https://127.0.0.1:6443 \
+            --kubeconfig=admin.kubeconfig
+        
+          kubectl config set-credentials admin \
+            --client-certificate=admin.pem \
+            --client-key=admin-key.pem \
+            --embed-certs=true \
+            --kubeconfig=admin.kubeconfig
+        
+          kubectl config set-context default \
+            --cluster=kubernetes-the-hard-way \
+            --user=admin \
+            --kubeconfig=admin.kubeconfig
+        
+          kubectl config use-context default --kubeconfig=admin.kubeconfig
+        }
+    chdir: "{{ certs_dir }}"
+  environment:
+      KUBERNETES_PUBLIC_ADDRESS: "{{ KUBERNETES_PUBLIC_ADDRESS }}"
+      CERTS_DIR: "{{ certs_dir }}"

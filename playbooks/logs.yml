@@ -1,0 +1,37 @@
+---
+
+- name: Export Logs
+  hosts: controller-*
+  remote_user: root
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Create log dir
+      ansible.builtin.file:
+        path: "{{ LOGS_DIR }}"
+        state: directory
+
+    - name: Export logs
+      ansible.builtin.shell:
+        cmd: "journalctl -u {{ item }} -o short > {{ LOGS_DIR }}/{{ ansible_hostname }}-{{ item }}.log"
+      loop:
+        - kube-apiserver
+        - kube-controller-manager
+        - kube-scheduler
+        - etcd
+
+- name: Download logs
+  hosts: controller-*
+  remote_user: root
+  vars_files:
+    - vars.yml
+  tasks:
+    - name: Download logs to local machine
+      ansible.posix.synchronize:
+        src: "{{ LOGS_DIR }}/"
+        dest: "{{ LOGS_DIR_LOCAL }}"
+        mode: pull
+        group: no
+        owner: no
+        perms: no

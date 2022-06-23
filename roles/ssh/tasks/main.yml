@@ -1,0 +1,13 @@
+---
+
+- set_fact:
+    my_hosts: "{{ hostvars
+                      | dict2items 
+                      | map(attribute='value')
+                      | list
+                      }}"
+
+- name: Write ssh config file
+  template:
+    src: templates/config.j2
+    dest: ~/.ssh/config

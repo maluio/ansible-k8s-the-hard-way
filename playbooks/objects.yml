@@ -1,0 +1,10 @@
+---
+- name: Install local tools
+  hosts: localhost
+  vars_files:
+    - vars.yml
+  roles:
+    - role: kubectl
+      tags: [ kubectl ]
+    - role: dns
+      tags: [ dns ]

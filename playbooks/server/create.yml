@@ -1,0 +1,41 @@
+---
+- name: Create servers
+  hosts: localhost
+  tasks:
+    - name:
+      ansible.builtin.file:
+        path: ~/.ssh
+        state: directory
+
+    - name: Generate an OpenSSH keypair with the default values (4096 bits, rsa)
+      community.crypto.openssh_keypair:
+        path: ~/.ssh/id_rsa
+      register: ssh_result
+
+    - name: Remove ssh_key
+      hcloud_ssh_key:
+        name: k8s-thw
+        state: absent
+
+    - name: Add new ssh_key
+      hcloud_ssh_key:
+        name: k8s-thw
+        public_key: "{{ssh_result['public_key'] }}"
+        state: present
+
+    - name: Create servers
+      hcloud_server:
+        name: "{{ item }}"
+        state: present
+        datacenter: nbg1-dc3
+        image: ubuntu-20.04
+        server_type: cx11
+        ssh_keys:
+          - k8s-thw
+      loop:
+        - controller-0
+        - controller-1
+        - controller-2
+        - worker-0
+        - worker-1
+        - worker-2

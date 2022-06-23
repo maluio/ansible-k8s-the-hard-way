@@ -1,0 +1,5 @@
+certs_dir: /tmp/certs
+certs_dir_local: "{{ lookup('env', 'CERTS_DIR_LOCAL') }}"
+LOGS_DIR: /tmp/logs
+LOGS_DIR_LOCAL: /usr/src/app/logs
+ENCRYPTION_KEY: "{{ lookup('env', 'ENCRYPTION_KEY') }}"

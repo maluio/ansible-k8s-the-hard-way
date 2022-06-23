@@ -1,0 +1,5 @@
+- name: Create ssh config
+  hosts: localhost
+  roles:
+    - role: ssh
+      tags: [ ssh ]

@@ -1,0 +1,138 @@
+---
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/79a3f79b27bd28f82f071bb877a266c2e62ee506/docs/09-bootstrapping-kubernetes-workers.md#bootstrapping-the-kubernetes-worker-nodes
+- name: Install the OS dependencies
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    update_cache: yes
+  loop:
+    - socat
+    - conntrack
+    - ipset
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/79a3f79b27bd28f82f071bb877a266c2e62ee506/docs/09-bootstrapping-kubernetes-workers.md#disable-swap
+- name: Disable swap
+  ansible.builtin.shell:
+    cmd: swapoff -a
+
+- name: Create the installation directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - /etc/cni/net.d
+    - /opt/cni/bin
+    - /var/lib/kubelet
+    - /var/lib/kube-proxy
+    - /var/lib/kubernetes
+    - /var/run/kubernetes
+    - /etc/containerd
+
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/79a3f79b27bd28f82f071bb877a266c2e62ee506/docs/09-bootstrapping-kubernetes-workers.md#disable-swap
+- name: Download Worker Binaries
+  ansible.builtin.shell:
+    chdir: ~/
+    cmd: |
+      wget -q --show-progress --https-only --timestamping \
+        https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.21.0/crictl-v1.21.0-linux-amd64.tar.gz \
+        https://github.com/opencontainers/runc/releases/download/v1.0.0-rc93/runc.amd64 \
+        https://github.com/containernetworking/plugins/releases/download/v0.9.1/cni-plugins-linux-amd64-v0.9.1.tgz \
+        https://github.com/containerd/containerd/releases/download/v1.4.4/containerd-1.4.4-linux-amd64.tar.gz \
+        https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kubectl \
+        https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-proxy \
+        https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kubelet
+
+- name: Install Worker Binaries
+  ansible.builtin.shell:
+    chdir: ~/
+    cmd: |
+      {
+        mkdir containerd
+        tar -xvf crictl-v1.21.0-linux-amd64.tar.gz
+        tar -xvf containerd-1.4.4-linux-amd64.tar.gz -C containerd
+        sudo tar -xvf cni-plugins-linux-amd64-v0.9.1.tgz -C /opt/cni/bin/
+        sudo mv runc.amd64 runc
+        chmod +x crictl kubectl kube-proxy kubelet runc 
+        sudo mv crictl kubectl kube-proxy kubelet runc /usr/local/bin/
+        sudo mv containerd/bin/* /bin/
+      }
+
+- name:
+  set_fact:
+    # split 'worker-*' into list['worker', '*']
+    WORKER_SPLIT: "{{ ansible_hostname | split('-') }}"
+
+# --metadata pod-cidr=10.200.${i}.0/24 is set during gcloud instance creation
+# see https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/03-compute-resources.md#kubernetes-workers
+- name:
+  set_fact:
+    POD_CIDR: "10.200.{{ WORKER_SPLIT[1] }}.0/24"
+
+- name: Create the bridge network configuration file
+  ansible.builtin.template:
+    src: templates/10-bridge.conf
+    dest: /etc/cni/net.d/10-bridge.conf
+
+- name: Create the loopback network configuration file
+  ansible.builtin.template:
+    src: templates/99-loopback.conf
+    dest: /etc/cni/net.d/99-loopback.conf
+
+- name: Create the containerd configuration file
+  ansible.builtin.template:
+    src: templates/config.toml
+    dest: /etc/containerd/config.toml
+
+- name: Create the containerd.service systemd unit file
+  ansible.builtin.template:
+    src: templates/containerd.service
+    dest: /etc/systemd/system/containerd.service
+
+- name: Copy pems + config
+  ansible.builtin.shell:
+    chdir: ~/
+    cmd: |
+      {
+        cp ${HOSTNAME}-key.pem ${HOSTNAME}.pem /var/lib/kubelet/
+        cp ${HOSTNAME}.kubeconfig /var/lib/kubelet/kubeconfig
+        cp ca.pem /var/lib/kubernetes/
+      }
+  environment:
+    HOSTNAME: "{{ ansible_hostname }}"
+
+- name: Create the kubelet-config.yaml
+  ansible.builtin.template:
+    src: templates/kubelet-config.yaml
+    dest: /var/lib/kubelet/kubelet-config.yaml
+
+- name: Create the kubelet.service file
+  ansible.builtin.template:
+    src: templates/kubelet.service
+    dest: /etc/systemd/system/kubelet.service
+
+- name: Copy kubeconfig file
+  ansible.builtin.copy:
+    src: ~/kube-proxy.kubeconfig
+    dest: /var/lib/kube-proxy/kubeconfig
+    remote_src: yes
+
+- name: Create the kube-proxy-config.yaml file
+  ansible.builtin.template:
+    src: templates/kube-proxy-config.yaml
+    dest: /var/lib/kube-proxy/kube-proxy-config.yaml
+
+- name: Create thekube-proxy.service file
+  ansible.builtin.template:
+    src: templates/kube-proxy.service
+    dest: /etc/systemd/system/kube-proxy.service
+
+- name: Start services
+  ansible.builtin.systemd:
+    state: started
+    name: "{{ item }}"
+    daemon_reload: yes
+  loop:
+    - containerd
+    - kubelet
+    - kube-proxy

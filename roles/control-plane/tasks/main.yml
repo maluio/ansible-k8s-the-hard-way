@@ -1,0 +1,84 @@
+---
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/79a3f79b27bd28f82f071bb877a266c2e62ee506/docs/08-bootstrapping-kubernetes-controllers.md#bootstrapping-the-kubernetes-control-plane
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/79a3f79b27bd28f82f071bb877a266c2e62ee506/docs/08-bootstrapping-kubernetes-controllers.md#download-and-install-the-kubernetes-controller-binaries
+- name: Install k8s controll binaries
+  get_url:
+    url: "https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    mode: '0550'
+  loop:
+    - kube-apiserver
+    - kube-controller-manager
+    - kube-scheduler
+    - kubectl
+
+- name: Create /var/lib/kubernetes
+  ansible.builtin.file:
+    path: /var/lib/kubernetes
+    state: directory
+
+# https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/79a3f79b27bd28f82f071bb877a266c2e62ee506/docs/08-bootstrapping-kubernetes-controllers.md#configure-the-kubernetes-api-server
+- name: Copy certs + conf files
+  ansible.builtin.copy:
+    src: "~/{{ item }}"
+    dest: "/var/lib/kubernetes/{{ item }}"
+    remote_src: yes
+  loop:
+    - encryption-config.yaml
+    - ca.pem
+    - ca-key.pem
+    - kubernetes-key.pem
+    - kubernetes.pem
+    - service-account-key.pem
+    - service-account.pem
+    - kube-controller-manager.kubeconfig
+    - kube-scheduler.kubeconfig
+
+- name:
+  set_fact:
+    KUBERNETES_PUBLIC_ADDRESS: "{{ hostvars['controller-0']['ipv4'] }}"
+    INTERNAL_IP: "{{ hostvars[ansible_hostname]['ipv4'] }}"
+    my_hosts: "{{ hostvars
+                      | dict2items 
+                      | map(attribute='value')
+                      | list
+                      }}"
+
+# This fixes the issue "Error from server: error dialing backend: dial tcp: lookup worker-1 on 127.0.0.53:53: server misbehaving"
+# see https://github.com/kelseyhightower/kubernetes-the-hard-way/issues/630#issuecomment-792260530
+- name: Set hosts in /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ item.ansible_host }} {{ item.inventory_hostname }}"
+  loop: "{{ my_hosts }}"
+
+- name: Create /etc/kubernetes/config
+  ansible.builtin.file:
+    path: /etc/kubernetes/config
+    state: directory
+
+- name: Copy kube-scheduler.yaml
+  ansible.builtin.template:
+    src: "templates/kube-scheduler.yaml"
+    dest: "/etc/kubernetes/config/kube-scheduler.yaml"
+
+- name: Copy service files
+  ansible.builtin.template:
+    src: "templates/{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+  loop:
+    - kube-apiserver.service
+    - kube-controller-manager.service
+    - kube-scheduler.service
+
+- name: Start services
+  ansible.builtin.systemd:
+    state: started
+    name: "{{ item }}"
+    daemon_reload: yes
+  loop:
+    - kube-apiserver
+    - kube-controller-manager
+    - kube-scheduler
